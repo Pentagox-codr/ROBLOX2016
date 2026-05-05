@@ -1,0 +1,64 @@
+name: Build Roblox 2016
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2019
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1.1
+
+      - name: Install VS2015 Build Tools (v140_xp)
+        shell: powershell
+        run: |
+          # Use Chocolatey to install the specific legacy build tools required
+          choco install visualstudio2015buildtools --version 14.0.25420.1
+
+      - name: Build Boost
+        shell: cmd
+        run: |
+          cd Library\boost
+          call bootstrap.bat
+          :: We use the existing build_boost.bat but ensure it uses the local path
+          call build_boost.bat
+        env:
+          BOOST_ROOT: ${{ github.workspace }}\Library\boost
+
+      - name: Configure and Build Qt (Partial)
+        shell: cmd
+        run: |
+          :: Set up the VS2015 x86 environment variables manually
+          call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x86
+          
+          cd Library\Qt
+          :: Run the configure command as specified in your README
+          configure -make nmake -platform win32-msvc2015 -prefix "%CD%" -opensource -confirm-license -opengl desktop -nomake examples -nomake tests -webkit -xmlpatterns
+          
+          :: Start nmake. We wrap this in a '|| ver > nul' to ignore the 
+          :: expected partial failure mentioned in your README.
+          nmake || echo Qt build finished with expected partial completion.
+
+      - name: Build Roblox Solution
+        shell: cmd
+        run: |
+          msbuild Roblox.sln /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v140_xp
+
+      - name: Upload Artifacts
+        uses: actions/actions-upload@v4
+        with:
+          name: Roblox-2016-Build
+          path: |
+            bin/*.exe
+            bin/*.dll
