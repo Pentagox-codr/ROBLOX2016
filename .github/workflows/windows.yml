@@ -27,16 +27,19 @@ jobs:
 
       # ---- BOOST BUILD ----
       - name: Build Boost
-        working-directory: Library/boost
-        run: |
-          bootstrap.bat
-          call build_boost.bat
-
-      # ---- QT BUILD ----
-      - name: Configure Qt
-        working-directory: Library/Qt
         shell: cmd
         run: |
+          cd Library\boost
+          call bootstrap.bat
+          call build_boost.bat
+        env:
+          BOOST_ROOT: ${{ github.workspace }}\Library\boost
+
+      # ---- QT BUILD ----
+      - name: Configure 
+        shell: cmd
+        run: |
+          cd Library/Qt
           configure -make nmake ^
           -platform win32-msvc2015 ^
           -prefix %BUILD_DIR%\Library\Qt ^
