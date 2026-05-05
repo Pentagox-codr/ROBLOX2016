@@ -1,59 +1,67 @@
-name: Build Roblox 2016
+name: Build Roblox (2016 Source)
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
+    branches: [ main ]
 
 jobs:
   build:
-    runs-on: windows-2019
+    runs-on: windows-latest
+
+    env:
+      BUILD_DIR: ${{ github.workspace }}
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
+      # Setup MSBuild (Visual Studio)
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      # Optional: Setup VS Dev Command Prompt
+      - name: Setup Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+
+      # ---- BOOST BUILD ----
       - name: Build Boost
-        shell: cmd
+        working-directory: Library/boost
         run: |
-          cd Library\boost
-          call bootstrap.bat
+          bootstrap.bat
           call build_boost.bat
-        env:
-          BOOST_ROOT: ${{ github.workspace }}\Library\boost
 
-      - name: Configure and Build Qt (Partial)
+      # ---- QT BUILD ----
+      - name: Configure Qt
+        working-directory: Library/Qt
         shell: cmd
         run: |
-          :: Initialize the v140 (VS2015) compiler environment from the VS2019 runner
-          call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars32.bat"
-          
-          cd Library\Qt
-          :: Using %CD% to dynamically set the path for the runner environment
-          configure -make nmake -platform win32-msvc2015 -prefix "%CD%" -opensource -confirm-license -opengl desktop -nomake examples -nomake tests -webkit -xmlpatterns
-          
-          :: Start nmake; ignore expected break as per project instructions
-          nmake || echo Qt build finished with expected partial completion.
+          configure -make nmake ^
+          -platform win32-msvc2015 ^
+          -prefix %BUILD_DIR%\Library\Qt ^
+          -opensource -confirm-license ^
+          -opengl desktop ^
+          -nomake examples -nomake tests ^
+          -webkit -xmlpatterns
 
+      - name: Build Qt (partial)
+        working-directory: Library/Qt
+        run: nmake
+
+      # ---- BUILD MAIN SOLUTION ----
       - name: Build Roblox Solution
-        shell: cmd
         run: |
-          :: Build the solution using the v140 toolset
-          msbuild Roblox.sln /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v140
+          msbuild Roblox.sln ^
+          /p:Configuration=Release ^
+          /p:Platform=Win32 ^
+          /m
 
-      - name: Upload Artifacts
-        if: success() || failure()
+      # ---- ARTIFACTS ----
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Roblox-2016-Build
+          name: roblox-build
           path: |
-            bin/*.exe
-            bin/*.dll
-            Library/Qt/lib/*.lib
+            **/Release/*.exe
+            **/Release/*.dll
