@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2019
 
     steps:
       - name: Checkout Repository
@@ -18,20 +18,13 @@ jobs:
           submodules: recursive
 
       - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v1.1
-
-      - name: Install VS2015 Build Tools (v140_xp)
-        shell: powershell
-        run: |
-          # Use Chocolatey to install the specific legacy build tools required
-          choco install visualstudio2015buildtools --version 14.0.25420.1
+        uses: microsoft/setup-msbuild@v2
 
       - name: Build Boost
         shell: cmd
         run: |
           cd Library\boost
           call bootstrap.bat
-          :: We use the existing build_boost.bat but ensure it uses the local path
           call build_boost.bat
         env:
           BOOST_ROOT: ${{ github.workspace }}\Library\boost
@@ -39,26 +32,28 @@ jobs:
       - name: Configure and Build Qt (Partial)
         shell: cmd
         run: |
-          :: Set up the VS2015 x86 environment variables manually
-          call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x86
+          :: Initialize the v140 (VS2015) compiler environment from the VS2019 runner
+          call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars32.bat"
           
           cd Library\Qt
-          :: Run the configure command as specified in your README
+          :: Using %CD% to dynamically set the path for the runner environment
           configure -make nmake -platform win32-msvc2015 -prefix "%CD%" -opensource -confirm-license -opengl desktop -nomake examples -nomake tests -webkit -xmlpatterns
           
-          :: Start nmake. We wrap this in a '|| ver > nul' to ignore the 
-          :: expected partial failure mentioned in your README.
+          :: Start nmake; ignore expected break as per project instructions
           nmake || echo Qt build finished with expected partial completion.
 
       - name: Build Roblox Solution
         shell: cmd
         run: |
-          msbuild Roblox.sln /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v140_xp
+          :: Build the solution using the v140 toolset
+          msbuild Roblox.sln /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v140
 
       - name: Upload Artifacts
+        if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
           name: Roblox-2016-Build
           path: |
             bin/*.exe
             bin/*.dll
+            Library/Qt/lib/*.lib
