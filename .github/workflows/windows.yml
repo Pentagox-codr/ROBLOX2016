@@ -56,7 +56,7 @@ jobs:
           msbuild Roblox.sln /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v140_xp
 
       - name: Upload Artifacts
-        uses: actions/actions-upload@v4
+        uses: actions/upload-artifact@v4
         with:
           name: Roblox-2016-Build
           path: |
